@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html><title>Snow Crystal Growth | Algorithmic art with vanilla JavaScript</title>
+      <meta name="author" content="Markus Michelmann"><style>html,body{margin:0;}</style></html>
+<body><canvas id="cnv" width="1000" height="1500"></canvas><script>
+  /*********************************************************************************************
+   * Wachstumssimulation eines Schneekristalls mit zelluläreren Automaten im Reiter-Modell     *
+   * (Orginal-Veröffentlichung: https://doi.org/10.1016/j.chaos.2004.06.071)                   *
+   *********************************************************************************************/
+  const alpha = 1.0, beta = 0.35, gamma = 0.001, N = 150, M = 150;        // Simulationsparameter
+  let cnv, ctx, a0, b0, W, H, W0, H0, s, u, bg, cos=Math.cos, sin=Math.sin, sqrt=Math.sqrt;
+  const add    = (a,b) => [a[0]+b[0], a[1]+b[1]],                               // Vektoraddition
+        nbrs   = (i,j) => [ [i-1, j], [i-1, j+1-2*(i%2)], [i, j-1],             // Gitternachbarn
+                            [i, j+1], [i+1, j], [i+1, j+1-2*(i%2)] ],       
+        getAvr = (i,j) => nbrs(i,j).reduce((s,k)=>s+u[k[0]][k[1]],0)/6,       // Mittelwert von u
+        isRcpt = (i,j) => [[i,j],...nbrs(i,j)].some(k=>s[k[0]][k[1]]>=1),     // Rezeptive Zellen
+        isEdge = (i,j) => (i===0||i===N-1||j===0||j===M-1),                   // Rand des Gitters
+        getPos = (i,j) => [(W-W0)/2+1.5*i*a0,(H-H0)/2+(2*j-i%2)*b0];      // Position einer Zelle
+        
+  function rescale(){                                             // Reskalierung der Darstellung
+    W = cnv.width=window.innerWidth, H = cnv.height=window.innerHeight;   // Canvas-Breite & Höhe
+    a0 = Math.min(2*W/(3*N+1), 2*H/(sqrt(3)*(2*M+1))), b0 = 0.5*sqrt(3)*a0;    // Gitterparameter
+    W0 = (3*N + 1)/2*a0, H0 = (2*M + 1)*b0;                          // Effektive Breite und Höhe
+    bg = ctx.createLinearGradient(0,0,0,H);                                        // Hintergrund
+    bg.addColorStop(0,'#008'), bg.addColorStop(1,'#004');
+  }
+  function draw(){                                                        // Hauptzeichenfunktion
+    ctx.fillStyle = bg, ctx.beginPath(), ctx.fillRect(0, 0, W, H);
+    for(let i = 1; i < N - 1; i++)                   // Zeichne die gefrorenen Zellen des Gitters
+      for(let j = 1; j < M - 1; j++)                        // (Übersättigte Wasserkonzentration)
+        if(s[i][j] >= 1) drawCell(i, j, lerpClr((s[i][j]-1)/(s[i][j]-0.5), '#88f','#fff'));  
+    for(let i = 0; i < 10; i++) updateCrystal();                 // Führe Simulationsschritte aus
+    requestAnimationFrame(draw);                           // Wiederhole die Funktion (draw loop)
+  }
+  function lerpClr(x, clrA, clrB){                                  // Lineare Farb-Interpolation
+    let [__,r,g,b,_,R,G,B] = (clrA+clrB).split("").map(c => Number("0x"+c)),  // String => Number
+        v = [[r,R],[g,G],[b,B]].map(w => ~~(w[0] + x*(w[1] - w[0])));         //    Interpolation
+    return "#" + v.map(w => Number(w).toString(16)).reduce((r,s)=>r+s,"");    // Number => String
+  }
+  function initCrystal(){                              // Initialisierung des hexagonalen Gitters
+    s=[...Array(N)].map(()=>Array(M)), u=[...Array(N)].map(()=>Array(M));
+    for(let i = 0, i0 = N>>1; i < N; i++)      // Initialisiere die Wasserkonzentrationen s und u
+      for(let j = 0, j0 = M>>1; j < M; j++)    //  (totale und diffusiv) mit dem Anfangswert beta
+        u[i][j] = s[i][j] = i===i0 && j===j0 ? 1 : beta;  // & plaziere Impfkristall in der Mitte
+  }
+  function updateCrystal(){                                                 // Simulationsschritt
+    for(let i = 0; i < N; i++)              // Ermittle den diffusiven Wasseranteil in den Zellen
+      for(let j = 0; j < M; j++)        // (nicht diffusiv sind gefrorene Zellen & ihre Nachbarn)
+        u[i][j] = !isEdge(i,j) && isRcpt(i,j) ? 0 : s[i][j];   
+    for(let i = 1; i < N - 1; i++)          // Aktualisiere die Wasserkonzentration in den Zellen
+      for(let j = 1; j < M - 1; j++)        // (alpha: Diffusionskonstante, gamma: äußere Zufuhr)
+        s[i][j] = (u[i][j]? 0 : s[i][j] + gamma) + (1-alpha/2)*u[i][j] + alpha/2*getAvr(i,j);
+  }
+  function drawCell(i, j, clr){                           // Zeichenfunktion für eine Gitterzelle
+    let del = [[a0,0],[a0/2,b0],[-a0/2,b0],[-a0,0],[-a0/2,-b0],[a0/2,-b0]],
+        p = getPos(i,j), verts = del.map(d => add(p,d));       // Ermittle Eckpunkte des Hexagons
+    ctx.beginPath(), ctx.moveTo(...verts.at(-1)); for(let v of verts) ctx.lineTo(...v); 
+    ctx.fillStyle=clr, ctx.strokeStyle=clr, ctx.fill(), ctx.stroke();      // Zeichne das Hexagon
+  }
+
+  window.onload = function(){                          // Programmausführung beim Laden der Seite
+    cnv=document.getElementById("cnv"), ctx=cnv.getContext("2d"); 
+    initCrystal(); rescale(); draw();    // Initialsiere Gitter & Canvas und führe Simulation aus
+  };
+  window.addEventListener('resize', rescale); 
+</script></body>

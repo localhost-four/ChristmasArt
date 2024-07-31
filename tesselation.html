@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html><title>Christmas Tesselation | Algorithmic art with vanilla JavaScript</title>
+      <meta name="author" content="Markus Michelmann"><style>html,body{margin:0;}</style></html>
+<body><canvas id="cnv" width="1000" height="1500"></canvas><script>
+  let cnv, ctx, a0, b0, W, H, N=5, M=5, cos=Math.cos, sin=Math.sin, sqrt=Math.sqrt, PI=Math.PI;
+  const decorClrs=['#f20','#02f','#ccc'], treeClrs=['#043','#480','#340','#084','#060','#282']; 
+  const add=(a,b)=>[a[0]+b[0],a[1]+b[1]], sub=(a,b)=>[a[0]-b[0],a[1]-b[1]],     // Vektoraddition
+        dot=(a,b)=>a.length ? a[0]*b[0]+a[1]*b[1] : [a*b[0], a*b[1]],            // Skalarprodukt
+        rot=(x,a)=>[a[0]*cos(x)-a[1]*sin(x), a[0]*sin(x)+a[1]*cos(x)],                // Rotation
+        lc=(...a)=>[...a].reduce((s,x) => add(s,dot(x[0],x[1])), [0,0]);     // Linearkombination
+  const pos=(i,j)=>[(3*i+1)/2*a0,(2*j-i%2)*b0];   //Position des Hexagons in Zeile i und Spalte j
+  function lerpClr(x,clrA,clrB){                                            // Farb-Interpolation
+    let [__,r,g,b,_,R,G,B] = (clrA+clrB).split("").map(c => Number("0x"+c)),
+        v = [[r,R],[g,G],[b,B]].map(u=>~~(u[0]+x*(u[1]-u[0])));
+        return "#"+v.map(u=>Number(u).toString(16)).reduce((r,s)=>r+s,""); }
+  function circle(p, r, clr){                            // Zeichne einen Kreis um p mit Radius r
+    ctx.beginPath(); ctx.arc(...p,r,0,2*PI); ctx.fillStyle = clr; ctx.fill(); }
+  function polygon(verts, clr, s){              // Zeichne ein Vieleck durch die gegebenen Punkte
+    ctx.beginPath(); ctx.moveTo(...verts.at(-1)); for(let v of verts) ctx.lineTo(...v); 
+    ctx.fillStyle = clr; ctx.fill(); if(s) ctx.stroke(); }
+  function line(A, B, w, clr){                                 // Zeichne eine Linie von A nach B
+    ctx.beginPath(); ctx.moveTo(...A); ctx.lineTo(...B); 
+    ctx.strokeStyle=clr; ctx.lineWidth=w; ctx.stroke(); }
+  function grad(A, B, stops, rA, rB){                            // Erzeuge einen Farb-Gradienten
+    let g = rB? ctx.createRadialGradient(...A,rA,...B,rB) : ctx.createLinearGradient(...A, ...B);
+    for(let [x, clr] of stops) g.addColorStop(x, clr); return g; }
+  function star(A, B, t, n, clrA, clrB){                        // Zeichne einen n-zackigen Stern
+    let AB = sub(B,A), r = sqrt(dot(AB,AB)), a = [...Array(2*n).keys()],
+        verts = a.map( k => add(A,dot(1 - t*(k%2), rot(k*PI/n, AB))) );
+    polygon(verts, grad(A, A, [[0,clrA],[1,clrB]], 0.05*r, 0.6*r)); }
+  function gift(A, B, w, clr1, clr2){                                     // Zeichne ein Geschenk
+    let verts   = [0,1,2,3,4,5].map(i => add(A,rot(i*PI/3,sub(B,A)))),
+        [fc,rc] = [clr1,clr2].map(x => [x,lerpClr(0.2,x,'#fff'),lerpClr(0.2,x,'#00f')]);
+    for(let i = 0, k = 1; i < 3; i++, k += 2)
+    { let face = [A, verts[k], verts[(k+1)%6], verts[(k+2)%6]], ribbon = [];
+      for(let j = 0, u = (1 + w)/2, v = (1 - w)/2, C, D, E; j < 4; j++)
+        C = face[j], D = face[(j+1)%4], E = face[(j+2)%4],
+        ribbon.push(lc([u,C],[v,D]), lc([v,C],[u,D]), lc([v,C],[w,D],[v,E]));
+      polygon(face, fc[i]), polygon(ribbon, rc[i]); } }
+  function bauble(A, B, clr){                                     // Zeichne eine Christbaumkugel
+    let AB = sub(B, A), C = add(A, dot(1/2, AB)), D = add(A, dot(1/4, AB)),
+        E = add(A,rot(PI/16,sub(C,A))), F = add(A,rot(-PI/16,sub(C,A))), G = add(F,dot(0.1,AB)), 
+        H = add(E,dot(0.1,AB)), r =sqrt(dot(AB,AB))/4, I = add(A,dot(1/3,rot(PI/8,AB)));
+    circle(D, r, grad(I,I,[[0,lerpClr(0.8,clr,'#fff')],[1,clr]],r/20,0.4*r));
+    line(C, B, 2, '#c80'), polygon([E,F,G,H], '#fe0'); }
+  function candle(A, B, clr){                                               // Zeichne eine Kerze
+    let AB=sub(B,A), C=add(A,dot(1/2,AB)), D=add(A,dot(3/4,AB)), AE=dot(1/8,[-AB[1],AB[0]]), 
+        E=add(A,AE), F=sub(A,AE), G=sub(C,AE), H=add(C,AE), r=sqrt(dot(AB,AB))/4;
+    circle(D,r,'rgba(255,255,0,0.3)'); 
+    polygon([E,F,G,H],grad(A,C,[[0,clr],[1,lerpClr(0.5,clr,'#fff')]]));
+    ctx.beginPath(), ctx.moveTo(...C), ctx.quadraticCurveTo(...G, ...B), 
+    ctx.quadraticCurveTo(...H, ...C), ctx.fillStyle = '#ff8', ctx.fill(); }
+  function decorate(A, B, C, decor, clr){                                  // Schmücke einen Baum
+    let D = lc([1/3,A],[1/3,B],[1/3,C]), UV = dot(1/3,sub(C,D));
+    for(let X of [A,B,C]) U = lc([1/3,X],[2/3,D],[-0.1,UV]), decor(U, add(U, UV), clr); }
+  function placeGifts(A, B, C, w, clr){                        // Stelle Geschenke unter den Baum
+    for(let i = 1, AB = sub(B,A), P; i < 4; i++) 
+      P = add(A,dot(i/4,AB)), gift(P,add(P,dot(1/6,AB)),w,clr,'#c80'); }
+  function draw(){                                                               // Hauptfunktion
+    W = cnv.width=window.innerWidth, H = cnv.height=window.innerHeight;
+    a0 = Math.max(2*W/(3*N-1), 2*H/(sqrt(3)*(2*M-2))), b0 = 0.5*sqrt(3)*a0; 
+    for(let i=0; i<N; i++) for(let j=0, p; j<N && (p = pos(i,j)); j++) 
+      { for(let t, k=0; k<6; k++)
+          t=[add(p,rot(k*PI/3,[a0,0])),add(p,rot((k+1)*PI/3,[a0,0])),p],polygon(t,treeClrs[k],1), 
+          placeGifts(...t,0.2,decorClrs[k%3]), decorate(...t,k%2?bauble:candle,decorClrs[k%3]);
+        star(p,add(p,[0,0.2*b0]),0.4,6,'#ffa','#fb0', 1); }; }
+  window.onload = () => {cnv=document.getElementById("cnv"), ctx=cnv.getContext("2d"), draw();};
+  window.addEventListener('resize', draw); 
+</script></body>

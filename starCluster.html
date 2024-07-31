@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html><title>Star Cluster | Algorithmic art with vanilla JavaScript</title>
+      <meta name="author" content="Markus Michelmann"><style>html,body{margin:0;}</style></html>
+<body><canvas id="cnv" width="1000" height="1500"></canvas><script>
+  let cnv, ctx, W, H, L, a0, A0, B0, Nverts = 5, Ngens = 7, TAU = 2*Math.PI, e = 1e-10;
+  const sum = (...a) => [...a].reduce((s,x) => [s[0]+x[0], s[1]+x[1]], [0,0]),     // Vektorsumme
+        sub = (a, b) => [a[0] - b[0], a[1] - b[1]],                            // Vektordifferenz
+        mul = (a, b) => [a[0]*b[0] - a[1]*b[1], a[0]*b[1] + a[1]*b[0]], //komplexe Multiplikation
+        dot = (a, b) => a.length ? a[0]*b[0] + a[1]*b[1] : [a*b[0], a*b[1]],     // Skalarprodukt
+        det = (a, b) => a[0]*b[1] - a[1]*b[0],                                    // Kreuzprodukt
+        vec = (r, w) => [r * Math.cos(w), r * Math.sin(w)],                       // Radialvektor
+        dist = (a, b) => Math.sqrt((a[0] - b[0])**2 + (a[1] - b[1])**2);      // Abstandsfunktion
+
+  function crossing(A, B, C, D){                          // Schnitt der Liniensegmente AB und CD
+    let AB = sub(B,A), AC = sub(C,A), DC = sub(C,D), d = det(AB,DC), q = 1/d;  
+    let t = q*det(AC,DC), u = q*det(AB,AC), r = sum(A,dot(t,AB)); // Ermittle Geradenschnittpunkt
+    return (Math.min(Math.abs(d),t,u) > e && Math.max(t,u) < 1-e) ? r : null;    // Intervalltest
+  }
+
+  function Star(A, B, n){ // Konstruktor für einen regelmäßigen n-zackigen Stern aus zwei Punkten
+    let i, u = sub(B,A), r = vec(1,TAU/n), l = 2*n, v = this.verts = [A,,B];
+    for(i = 4; i < l; i += 2) v[i] = sum(v[i-2], u = mul(r, u)); //Konstruiere das äußere Polygon
+    for(i = 1; i < l; i += 2)                                    //Konstruiere das innere Polygon
+      v[i] = crossing(v[(i+l-3)%l], v[(i+1)%l], v[(i+l-1)%l], v[(i+3)%l]); // (Diagonalenschnitt)
+    this.ctr = dot(1/l, sum(...v));                                   // Bestimme den Mittelpunkt
+    this.ro = dist(this.ctr, v[0]), this.ri = dist(this.ctr, v[1]); // äußerer und innerer Radius
+  } 
+  Star.prototype.draw = function(){                          // Methode zum Zeichnen eines Sterns
+    let c = this.ctr, ri = this.ri, g = ctx.createRadialGradient(...c, ri/10, ...c, ri);
+    ctx.beginPath(), ctx.moveTo(...this.verts.at(-1));            // Starte beim letzten Eckpunkt
+    for(let v of this.verts) ctx.lineTo(...v);  // Durchlaufe die Eckpunkte und fülle das Polygon
+    g.addColorStop(0,'#ffa'), g.addColorStop(1,'#fb0'), ctx.fillStyle = g, ctx.fill();
+  } 
+  Star.prototype.overlaps = function(o){                  // Testet ob Sterne einander überlappen
+    let v=this.verts, u=o.verts, ri=this.ri, ro=this.ro, d=dist(this.ctr,o.ctr), di=ri+o.ri;
+    if(d < di || d > ro + o.ro) return d < di;    // Schnittstest für Innenkreise und Außenkreise
+    for(let i = 0; i < u.length; i += 2)       // Schittstest für die inneren Dreiecke des Sterns
+      for(let j = 0; j < v.length; j += 2) 
+        if(crossing(u[i], u.at(i-4), v[j], v.at(j-4))) return true;
+    return false;
+  } 
+  Star.prototype.expand = function(starList){  // Methode zum Erzeugen kleinerer Kopien des Stern
+    let v = this.verts, l = v.length, nxt, s;
+    loop: for(let i = 0; i < l; i += 2){                // Erzeuge für jedes zweite Liniensegment
+      nxt = new Star(v[i], v.at(i-1), l/2);               // einen berührenden Stern falls dieser
+      for(s of starList) if(s.overlaps(nxt)) continue loop;// nicht mit anderen Sternen überlappt
+      starList.push(nxt); 
+    }
+  }
+
+  function rescale(){                                             // Reskalierung der Darstellung
+    W = cnv.width=window.innerWidth, H = cnv.height=window.innerHeight;   // Canvas-Breite & Höhe
+    L=Math.min(W,H), a0=L/(1.9*Nverts), A0=[W/2-a0,H/2-L/6], B0=sum(A0,[2*a0,0]);//Sternparameter
+  }
+  function draw(){                                                        // Hauptzeichenfunktion
+    let stars = [new Star(A0, B0, Nverts)];            // Erzeuge einen ersten Stern in der Mitte
+    for(let i = 1; i < Ngens; i++)       // Erzeuge der Reihe nach die weiteren Sterngenerationen
+      for(let s of [...stars]) s.expand(stars);     // indem jeder Stern neue Sterne hervorbringt
+    ctx.fillStyle = '#005', ctx.fillRect(0, 0, W, H);
+    for(let s of stars) s.draw();                                // Zeichne alle erzeugten Sterne
+    Nverts = (Nverts < 16)? Nverts + 1 : 5;              // Aktualisiere die Anzahl der Eckpunkte
+    setTimeout(() => {rescale();draw();}, 6000);             // Warte und zeichne eine neues Bild
+  }
+  window.onload = function(){                          // Programmausführung beim Laden der Seite
+    cnv=document.getElementById("cnv"), ctx=cnv.getContext("2d");
+    rescale(); draw();                           // Skaliere die Darstellung und Zeichne das Bild
+  } 
+</script></body>
